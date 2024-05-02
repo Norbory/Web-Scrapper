@@ -1,51 +1,24 @@
-/* eslint-disable no-undef */
-const { chromium } = require('playwright')
+const express = require('express')
+const app = express()
+const cors = require('cors')
+const morgan = require('morgan')
+const rateLimit = require('express-rate-limit')
 
-;(async () => {
-  const browser = await chromium.launch({
-    headless: false
-  })
-  const page = await browser.newPage()
-  await page.goto('https://offshoreleaks.icij.org/')
+// middlewares
+app.use(express.json())
+app.use(express.urlencoded({ extended: true }))
+app.use(morgan('dev'))
 
-  // Espera a que el diálogo aparezca y luego lo cierra
-  await page.waitForSelector('#__BVID__49')
-  await page.evaluate(() => {
-    const checkbox = document.querySelector('#__BVID__49 input[type="checkbox"]')
-    checkbox.click()
-    // Coloco un pequeño retraso para que el botón se active
-    const botonEnviar = document.querySelector('#__BVID__49 button')
-    setTimeout(() => {
-      botonEnviar.click()
-    }, 1000)
-  })
+// Configurar CORS para permitir todas las solicitudes
+app.use(cors())
 
-  // Agrega un pequeño retraso
-  await page.waitForTimeout(2000)
+// Limitar las solicitudes a 20 por minuto
+const limiter = rateLimit({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  max: 20 // limit each IP to 20 requests per windowMs
+})
 
-  // Selecciona el elemento de entrada y llena con 'Eddy Kao'
-  const inputElement = await page.getByPlaceholder('Search the full Offshore Leaks database')
-  await inputElement.fill('Eddy Kao')
+//  apply to all requests
+app.use(limiter)
 
-  // Hace clic en el botón de búsqueda
-  await page.getByRole('button', { name: 'Search' }).click()
-
-  // Espera a que la tabla se cargue
-  await page.waitForTimeout(2000)
-
-  await page.waitForSelector('.table-responsive table')
-  await page.evaluate(() => {
-    const tabla = document.querySelector('.table-responsive table')
-    const filas = tabla.querySelectorAll('tbody tr')
-    const datos = []
-    for (const fila in filas) {
-      const campo = fila.querySelectorAll('td')
-      const entidad = campo[0].querySelector('a').textContent
-      const jurisdiccion = campo[1].textContent
-      const linkedTo = campo[2].textContent
-      const dataFrom = campo[3].querySelector('a').textContent
-      datos.push({ entidad, jurisdiccion, linkedTo, dataFrom })
-    }
-    console.log(datos)
-  })
-})()
+module.exports = app
